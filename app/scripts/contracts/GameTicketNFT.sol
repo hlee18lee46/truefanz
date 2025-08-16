@@ -1,64 +1,61 @@
-import { ethers, network } from "hardhat";
-import * as fs from "fs";
-import * as path from "path";
-import "dotenv/config";
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.20;
 
-function getEnv(name: string, fallback?: string) {
-  const v = process.env[name];
-  if (v === undefined || v === "") return fallback;
-  return v;
+import {ERC721} from "@openzeppelin/contracts/token/ERC721/ERC721.sol";
+import {ERC721URIStorage} from "@openzeppelin/contracts/token/ERC721/extensions/ERC721URIStorage.sol";
+import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
+
+contract TicketNFT is ERC721URIStorage, Ownable {
+    uint256 public nextTokenId;
+    address public minter;
+    string private _baseTokenURI;
+
+    event MinterUpdated(address indexed newMinter);
+    event BaseURISet(string newBaseURI);
+    event Minted(address indexed to, uint256 indexed tokenId, string seatLabel);
+
+    constructor(
+        string memory name_,
+        string memory symbol_,
+        string memory baseURI_,
+        address initialOwner,
+        address initialMinter
+    ) ERC721(name_, symbol_) Ownable(initialOwner) {
+        _baseTokenURI = baseURI_;
+        minter = initialMinter;
+        emit BaseURISet(baseURI_);
+        emit MinterUpdated(initialMinter);
+    }
+
+    modifier onlyMinter() {
+        require(msg.sender == minter, "not minter");
+        _;
+    }
+
+    function setBaseURI(string calldata newBaseURI) external onlyOwner {
+        _baseTokenURI = newBaseURI;
+        emit BaseURISet(newBaseURI);
+    }
+
+    function setMinter(address newMinter) external onlyOwner {
+        minter = newMinter;
+        emit MinterUpdated(newMinter);
+    }
+
+    function baseTokenURI() external view returns (string memory) {
+        return _baseTokenURI;
+    }
+
+    function mintWithSeat(address to, string calldata seatLabel) public onlyMinter returns (uint256 tokenId) {
+        tokenId = nextTokenId++;
+        _safeMint(to, tokenId);
+        _setTokenURI(tokenId, string(abi.encodePacked(_baseTokenURI, seatLabel, ".json")));
+        emit Minted(to, tokenId, seatLabel);
+    }
+
+    function batchMintWithSeats(address to, string[] calldata seatLabels) external onlyMinter {
+        for (uint256 i = 0; i < seatLabels.length; i++) {
+            mintWithSeat(to, seatLabels[i]);
+        }
+    }
 }
-
-async function main() {
-  const [deployer] = await ethers.getSigners();
-
-  const feeBps = parseInt(getEnv("EXCHANGE_FEE_BPS", "250")!, 10); // default 2.5%
-  const feeRecipient = getEnv("EXCHANGE_FEE_RECIPIENT", deployer.address)!;
-
-  if (Number.isNaN(feeBps) || feeBps < 0 || feeBps > 1000) {
-    throw new Error("EXCHANGE_FEE_BPS must be an integer between 0 and 1000 (<=10%).");
-  }
-  if (!ethers.utils.isAddress(feeRecipient)) {
-    throw new Error("EXCHANGE_FEE_RECIPIENT must be a valid address.");
-  }
-
-  console.log("Network:", network.name);
-  console.log("Deployer:", deployer.address);
-  console.log("Fee (bps):", feeBps);
-  console.log("Fee recipient:", feeRecipient);
-
-  const Factory = await ethers.getContractFactory("TicketExchangeCHZ");
-  const contract = await Factory.deploy(feeBps, feeRecipient);
-  const deployTx = contract.deployTransaction;
-  console.log("Deploy tx:", deployTx.hash);
-
-  await contract.deployed();
-  const address = contract.address;
-  console.log("TicketExchangeCHZ deployed at:", address);
-
-  // Explorer link (Chiliz Spicy)
-  if (network.config.chainId === 88882) {
-    console.log(`Explorer: https://spicy-explorer.chiliz.com/address/${address}`);
-    console.log(`Tx:       https://spicy-explorer.chiliz.com/tx/${deployTx.hash}`);
-  }
-
-  // Persist address for the app
-  const outDir = path.join(process.cwd(), "deployments");
-  const outFile = path.join(outDir, `${network.name}.json`);
-  fs.mkdirSync(outDir, { recursive: true });
-
-  let existing: any = {};
-  if (fs.existsSync(outFile)) {
-    try {
-      existing = JSON.parse(fs.readFileSync(outFile, "utf8"));
-    } catch {}
-  }
-  existing.TicketExchangeCHZ = { address, feeBps, feeRecipient, deployedAt: new Date().toISOString() };
-  fs.writeFileSync(outFile, JSON.stringify(existing, null, 2));
-  console.log(`Saved deployment info to ${path.relative(process.cwd(), outFile)}`);
-}
-
-main().catch((e) => {
-  console.error(e);
-  process.exit(1);
-});

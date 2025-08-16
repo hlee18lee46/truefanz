@@ -1,0 +1,23 @@
+{
+  "name": "PSG vs ETH New Yorkers — Seat A-3-2",
+  "description": "Official match ticket for psg-ny-2025-01. Section A, Row 3, Seat 2.",
+  "image": "ipfs://bafybeigdyrplaceholder/psg-ticket.png",
+  "attributes": [
+    {
+      "trait_type": "Section",
+      "value": "A"
+    },
+    {
+      "trait_type": "Row",
+      "value": 3
+    },
+    {
+      "trait_type": "Seat",
+      "value": 2
+    },
+    {
+      "trait_type": "Event",
+      "value": "psg-ny-2025-01"
+    }
+  ]
+}

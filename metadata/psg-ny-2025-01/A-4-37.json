@@ -1,0 +1,31 @@
+{
+  "name": "PSG vs ETH New Yorkers — A-4-37",
+  "description": "Game ticket for PSG vs ETH New Yorkers — Section A, Row 4, Seat 37",
+  "image": "walrus://replace_with_seat_image_if_any",
+  "attributes": [
+    {
+      "trait_type": "Section",
+      "value": "A"
+    },
+    {
+      "trait_type": "Row",
+      "value": 4
+    },
+    {
+      "trait_type": "Seat",
+      "value": 37
+    },
+    {
+      "trait_type": "Event",
+      "value": "PSG vs ETH New Yorkers"
+    },
+    {
+      "trait_type": "Venue",
+      "value": "NYC Arena"
+    },
+    {
+      "trait_type": "Date",
+      "value": "2025-01-15"
+    }
+  ]
+}

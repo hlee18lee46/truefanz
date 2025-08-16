@@ -1,0 +1,31 @@
+{
+  "name": "PSG vs ETH New Yorkers — A-3-70",
+  "description": "Game ticket for PSG vs ETH New Yorkers — Section A, Row 3, Seat 70",
+  "image": "walrus://replace_with_seat_image_if_any",
+  "attributes": [
+    {
+      "trait_type": "Section",
+      "value": "A"
+    },
+    {
+      "trait_type": "Row",
+      "value": 3
+    },
+    {
+      "trait_type": "Seat",
+      "value": 70
+    },
+    {
+      "trait_type": "Event",
+      "value": "PSG vs ETH New Yorkers"
+    },
+    {
+      "trait_type": "Venue",
+      "value": "NYC Arena"
+    },
+    {
+      "trait_type": "Date",
+      "value": "2025-01-15"
+    }
+  ]
+}
