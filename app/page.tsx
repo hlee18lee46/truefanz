@@ -6,6 +6,8 @@ import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Search, Shield, Zap, Users, Ticket, ArrowRight, Star } from "lucide-react"
 import Link from "next/link"
+import SyncWalletButton from "@/components/SyncWalletButton";
+
 
 export default function HomePage() {
   return (
@@ -32,12 +34,9 @@ export default function HomePage() {
             </Link>
           </nav>
           <div className="flex items-center gap-3">
-            <Button variant="outline" size="sm">
-              Sign In
-            </Button>
-            <Button size="sm" className="bg-primary hover:bg-primary/90">
-              Get Started
-            </Button>
+          <div className="flex items-center gap-3">
+  <SyncWalletButton />
+</div>
           </div>
         </div>
       </header>

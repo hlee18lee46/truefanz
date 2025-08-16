@@ -1,5 +1,7 @@
 "use client"
 
+import SyncWalletButton from "@/components/SyncWalletButton";
+
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -133,12 +135,9 @@ export default function WalletPage() {
               </Link>
             </nav>
             <div className="flex items-center gap-3">
-              <Button variant="outline" size="sm">
-                Sign In
-              </Button>
-              <Button size="sm" className="bg-primary hover:bg-primary/90">
-                Get Started
-              </Button>
+            <div className="flex items-center gap-3">
+  <SyncWalletButton />
+</div>
             </div>
           </div>
         </header>
