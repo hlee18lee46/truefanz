@@ -1,105 +1,160 @@
-"use client"
+"use client";
 
-import { useState } from "react"
-import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { SecureQRModal } from "@/components/secure-qr-modal"
-import { Calendar, MapPin, Ticket, QrCode, Shield, Download, Share2, AlertTriangle } from "lucide-react"
-import Link from "next/link"
+import { useEffect, useMemo, useState } from "react";
+import { ethers } from "ethers";
+import { usePrivy, useWallets } from "@privy-io/react-auth";
+import { PSG_NFT_ADDRESS, psgNftAbi, getProvider, ipfsToHttp } from "@/lib/psgNft";
 
-const mockUserTickets = [
-  {
-    id: "TKT-001",
-    title: "Lakers vs Warriors",
-    date: "Dec 25, 2024",
-    time: "8:00 PM",
-    venue: "Crypto.com Arena",
-    location: "Los Angeles, CA",
-    section: "Section 101",
-    row: "Row 12",
-    seats: "Seats 5-6",
-    price: 2500,
-    purchaseDate: "2024-12-20",
-    status: "active",
-    image: "/basketball-arena.png",
-    qrEnabled: true,
-    transferable: true,
-    category: "Basketball",
-    eventDate: "2024-12-25",
-  },
-  {
-    id: "TKT-002",
-    title: "Real Madrid vs Barcelona",
-    date: "Jan 15, 2025",
-    time: "3:00 PM",
-    venue: "Santiago Bernabéu",
-    location: "Madrid, Spain",
-    section: "Tribune Nord",
-    row: "Row 8",
-    seats: "Seats 15-16",
-    price: 3200,
-    purchaseDate: "2024-12-18",
-    status: "active",
-    image: "/soccer-stadium-match.png",
-    qrEnabled: true,
-    transferable: true,
-    category: "Soccer",
-    eventDate: "2025-01-15",
-  },
-  {
-    id: "TKT-003",
-    title: "Celtics vs Heat",
-    date: "Dec 28, 2024",
-    time: "7:30 PM",
-    venue: "TD Garden",
-    location: "Boston, MA",
-    section: "Balcony 301",
-    row: "Row 5",
-    seats: "Seats 10-11",
-    price: 1800,
-    purchaseDate: "2024-12-12",
-    status: "used",
-    image: "/basketball-arena.png",
-    qrEnabled: false,
-    transferable: false,
-    category: "Basketball",
-    eventDate: "2024-12-28",
-  },
-]
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { SecureQRModal } from "@/components/secure-qr-modal";
+import { Calendar, MapPin, Ticket, QrCode, Shield, Download, Share2, AlertTriangle } from "lucide-react";
+import Link from "next/link";
+
+type TicketUI = {
+  id: number;
+  title: string;
+  date?: string;
+  time?: string;
+  venue?: string;
+  location?: string;
+  section?: string;
+  row?: string;
+  seats?: string;
+  price?: number;
+  image?: string;
+  status: "active" | "used" | "expired";
+  qrEnabled: boolean;
+  transferable: boolean;
+  eventDate?: string;
+};
 
 export default function MyTicketsPage() {
-  const [selectedTicket, setSelectedTicket] = useState<(typeof mockUserTickets)[0] | null>(null)
-  const [showQRModal, setShowQRModal] = useState(false)
+  const { user } = usePrivy();
+  const { wallets } = useWallets();
 
-  const activeTickets = mockUserTickets.filter((ticket) => ticket.status === "active")
-  const usedTickets = mockUserTickets.filter((ticket) => ticket.status === "used")
+  const [tickets, setTickets] = useState<TicketUI[]>([]);
+  const [loadingTickets, setLoadingTickets] = useState(true);
+  const [selectedTicket, setSelectedTicket] = useState<TicketUI | null>(null);
+  const [showQRModal, setShowQRModal] = useState(false);
 
-  const handleShowQR = (ticket: (typeof mockUserTickets)[0]) => {
-    setSelectedTicket(ticket)
-    setShowQRModal(true)
-  }
+  const activeAddress = useMemo(() => {
+    return (
+      user?.wallet?.address ||
+      wallets?.[0]?.address ||
+      null
+    );
+  }, [user?.wallet?.address, wallets]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    (async () => {
+      if (!activeAddress) {
+        setTickets([]);
+        setLoadingTickets(false);
+        return;
+      }
+
+      setLoadingTickets(true);
+      try {
+        const provider = getProvider();
+        const contract = new ethers.Contract(PSG_NFT_ADDRESS, psgNftAbi, provider);
+
+        // We minted 20 tickets: IDs 0..19
+        const ids = Array.from({ length: 20 }, (_, i) => i);
+
+        const owned = await Promise.all(
+          ids.map(async (id) => {
+            try {
+              const [owner, uri] = await Promise.all([
+                contract.ownerOf(id),
+                contract.tokenURI(id),
+              ]);
+              if (owner.toLowerCase() !== activeAddress.toLowerCase()) return null;
+
+              let meta: any = {};
+              try {
+                meta = await fetch(ipfsToHttp(uri)).then((r) => r.json());
+              } catch {
+                // ignore metadata fetch failure; still show a basic card
+              }
+
+              const attr = (k: string) =>
+                Array.isArray(meta?.attributes)
+                  ? meta.attributes.find((a: any) => a.trait_type === k)?.value
+                  : undefined;
+
+              const title = meta?.name || `PSG Ticket #${id}`;
+              const image = meta?.image ? ipfsToHttp(meta.image) : undefined;
+
+              const ticket: TicketUI = {
+                id,
+                title,
+                image,
+                section: attr("Section") || attr("section"),
+                row: attr("Row") || attr("row"),
+                seats: attr("Seat") || attr("seatLabel"),
+                venue: attr("Venue"),
+                location: attr("Location"),
+                date: attr("Date"),
+                time: attr("Time"),
+                price: meta?.price,
+                eventDate: attr("EventDate") || attr("Date"),
+                status: "active",
+                qrEnabled: true,
+                transferable: true,
+              };
+              return ticket;
+            } catch {
+              return null;
+            }
+          })
+        );
+
+        if (!cancelled) {
+          setTickets(owned.filter(Boolean) as TicketUI[]);
+        }
+      } finally {
+        if (!cancelled) setLoadingTickets(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeAddress]);
+
+  const activeTickets = tickets.filter((t) => t.status === "active");
+  const usedTickets = tickets.filter((t) => t.status === "used");
+
+  const handleShowQR = (ticket: TicketUI) => {
+    setSelectedTicket(ticket);
+    setShowQRModal(true);
+  };
 
   const getStatusBadge = (status: string) => {
     switch (status) {
       case "active":
-        return <Badge className="bg-green-500 text-white">Active</Badge>
+        return <Badge className="bg-green-500 text-white">Active</Badge>;
       case "used":
-        return <Badge variant="secondary">Used</Badge>
+        return <Badge variant="secondary">Used</Badge>;
       case "expired":
-        return <Badge variant="destructive">Expired</Badge>
+        return <Badge variant="destructive">Expired</Badge>;
       default:
-        return <Badge variant="secondary">{status}</Badge>
+        return <Badge variant="secondary">{status}</Badge>;
     }
-  }
+  };
 
-  const isEventSoon = (eventDate: string) => {
-    const event = new Date(eventDate)
-    const now = new Date()
-    const diffHours = (event.getTime() - now.getTime()) / (1000 * 60 * 60)
-    return diffHours <= 24 && diffHours > 0
-  }
+  const isEventSoon = (eventDate?: string) => {
+    if (!eventDate) return false;
+    const event = new Date(eventDate);
+    const now = new Date();
+    const diffHours = (event.getTime() - now.getTime()) / (1000 * 60 * 60);
+    return diffHours <= 24 && diffHours > 0;
+  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -129,9 +184,7 @@ export default function MyTicketsPage() {
               <Shield className="h-3 w-3 mr-1" />
               Verified
             </Badge>
-            <Button variant="outline" size="sm">
-              Profile
-            </Button>
+            <Button variant="outline" size="sm">Profile</Button>
           </div>
         </div>
       </header>
@@ -188,7 +241,9 @@ export default function MyTicketsPage() {
           </TabsList>
 
           <TabsContent value="active">
-            {activeTickets.length === 0 ? (
+            {loadingTickets ? (
+              <div className="text-center py-12 text-muted-foreground">Loading your tickets…</div>
+            ) : activeTickets.length === 0 ? (
               <div className="text-center py-12">
                 <Ticket className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
                 <h3 className="text-xl font-semibold font-sans mb-2">No active tickets</h3>
@@ -200,10 +255,7 @@ export default function MyTicketsPage() {
             ) : (
               <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {activeTickets.map((ticket) => (
-                  <Card
-                    key={ticket.id}
-                    className="border-border bg-card hover:shadow-lg transition-all duration-200 overflow-hidden"
-                  >
+                  <Card key={ticket.id} className="border-border bg-card hover:shadow-lg transition-all duration-200 overflow-hidden">
                     <div className="relative">
                       <div className="aspect-video bg-muted">
                         <img
@@ -232,27 +284,30 @@ export default function MyTicketsPage() {
                     <CardHeader className="pb-3">
                       <CardTitle className="font-sans text-lg">{ticket.title}</CardTitle>
                       <CardDescription className="font-serif text-sm">
-                        <div className="flex items-center gap-1 mb-1">
-                          <Calendar className="h-3 w-3" />
-                          {ticket.date} • {ticket.time}
-                        </div>
-                        <div className="flex items-center gap-1">
-                          <MapPin className="h-3 w-3" />
-                          {ticket.venue}, {ticket.location}
-                        </div>
+                        {(ticket.date || ticket.time) && (
+                          <div className="flex items-center gap-1 mb-1">
+                            <Calendar className="h-3 w-3" />
+                            {[ticket.date, ticket.time].filter(Boolean).join(" • ")}
+                          </div>
+                        )}
+                        {(ticket.venue || ticket.location) && (
+                          <div className="flex items-center gap-1">
+                            <MapPin className="h-3 w-3" />
+                            {[ticket.venue, ticket.location].filter(Boolean).join(", ")}
+                          </div>
+                        )}
                       </CardDescription>
 
                       <div className="space-y-2 pt-2">
-                        <div className="text-sm text-muted-foreground font-serif">
-                          {ticket.section} • {ticket.row} • {ticket.seats}
-                        </div>
-                        <div className="text-sm text-muted-foreground font-serif">
-                          Purchased: {new Date(ticket.purchaseDate).toLocaleDateString()}
-                        </div>
+                        {(ticket.section || ticket.row || ticket.seats) && (
+                          <div className="text-sm text-muted-foreground font-serif">
+                            {[ticket.section, ticket.row, ticket.seats].filter(Boolean).join(" • ")}
+                          </div>
+                        )}
 
                         <div className="flex items-center justify-between pt-2">
                           <span className="text-lg font-bold text-primary font-sans">
-                            {ticket.price.toLocaleString()} CHZ
+                            {ticket.price ? `${ticket.price.toLocaleString()} CHZ` : "—"}
                           </span>
                           <div className="flex gap-2">
                             {ticket.qrEnabled && (
@@ -313,16 +368,16 @@ export default function MyTicketsPage() {
                             <div>
                               <h3 className="font-semibold font-sans">{ticket.title}</h3>
                               <p className="text-sm text-muted-foreground font-serif">
-                                {ticket.date} • {ticket.venue}
+                                {[ticket.date, ticket.venue].filter(Boolean).join(" • ")}
                               </p>
                               <p className="text-sm text-muted-foreground font-serif">
-                                {ticket.section} • {ticket.seats}
+                                {[ticket.section, ticket.seats].filter(Boolean).join(" • ")}
                               </p>
                             </div>
                             <div className="text-right">
                               {getStatusBadge(ticket.status)}
                               <p className="text-sm text-muted-foreground font-serif mt-1">
-                                {ticket.price.toLocaleString()} CHZ
+                                {ticket.price ? `${ticket.price.toLocaleString()} CHZ` : "—"}
                               </p>
                             </div>
                           </div>
@@ -341,12 +396,12 @@ export default function MyTicketsPage() {
         <SecureQRModal
           isOpen={showQRModal}
           onClose={() => {
-            setShowQRModal(false)
-            setSelectedTicket(null)
+            setShowQRModal(false);
+            setSelectedTicket(null);
           }}
-          ticket={selectedTicket}
+          ticket={selectedTicket as any}
         />
       )}
     </div>
-  )
+  );
 }
