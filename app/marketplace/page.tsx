@@ -1,6 +1,7 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useMemo, useState } from "react"
+import { ethers } from "ethers"
 import { Button } from "@/components/ui/button"
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -10,6 +11,17 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Search, Filter, MapPin, Calendar, Star, Heart, ArrowUpDown, Ticket } from "lucide-react"
 import Link from "next/link"
 
+// ---- ABIs & env
+import PSGTicketNFT from "@/lib/abis/PSGTicketNFT.json"
+import PrimarySale from "@/lib/abis/PrimarySale.json"
+const psgNftAbi = (PSGTicketNFT as any).abi
+const saleAbi = (PrimarySale as any).abi
+
+const NFT_ADDRESS  = process.env.NEXT_PUBLIC_PSG_NFT_ADDRESS!
+const SALE_ADDRESS = process.env.NEXT_PUBLIC_FIXED_SALE_ADDRESS!
+const CHILIZ_RPC   = process.env.NEXT_PUBLIC_CHILIZ_RPC || "https://spicy-rpc.chiliz.com"
+
+// ---- your existing mock data (unchanged)
 const mockTickets = [
   {
     id: 1,
@@ -127,21 +139,102 @@ const mockTickets = [
   },
 ]
 
+// ---- helpers for IPFS
+function ipfsToHttp(u?: string) {
+  if (!u) return u
+  if (u.startsWith("ipfs://")) {
+    const cidPath = u.replace("ipfs://", "")
+    return `https://gateway.pinata.cloud/ipfs/${cidPath}`
+  }
+  return u
+}
+
 export default function MarketplacePage() {
   const [searchQuery, setSearchQuery] = useState("")
   const [selectedCategory, setSelectedCategory] = useState("all")
   const [sortBy, setSortBy] = useState("date")
   const [favorites, setFavorites] = useState<number[]>([])
+  const [chainTickets, setChainTickets] = useState<typeof mockTickets>([])
+  const [loading, setLoading] = useState(true)
+
+  // ---- fetch live listings & append to mock
+  useEffect(() => {
+    let mounted = true
+    ;(async () => {
+      try {
+        setLoading(true)
+        const provider = new ethers.providers.JsonRpcProvider(CHILIZ_RPC)
+        const sale = new ethers.Contract(SALE_ADDRESS, saleAbi, provider)
+        const nft  = new ethers.Contract(NFT_ADDRESS, psgNftAbi, provider)
+
+        // scan known minted token ids (adjust if yours differ)
+        const ids = Array.from({ length: 20 }, (_, i) => i)
+
+        const results: typeof mockTickets = []
+        for (const tid of ids) {
+          const priceWei: ethers.BigNumber = await sale.priceOf(tid)
+          if (priceWei.gt(0)) {
+            // try to load basic metadata
+            let name = `PSG Ticket #${tid}`
+            let image: string | undefined
+            try {
+              const uri: string = await nft.tokenURI(tid)
+              const metaUrl = ipfsToHttp(uri)
+              const meta = await fetch(metaUrl!).then(r => r.json()).catch(() => null)
+              if (meta?.name) name = meta.name
+              if (meta?.image) image = ipfsToHttp(meta.image)
+            } catch {}
+
+            const priceCHZ = Number(ethers.utils.formatUnits(priceWei, 18))
+
+            // map to your card shape; keep id space separate to avoid clashing with mock ids
+            results.push({
+              id: 10_000 + tid,
+              title: name,
+              date: "Jan 15, 2025",
+              time: "7:00 PM",
+              venue: "Parc des Princes",
+              location: "Paris, FR",
+              price: priceCHZ,
+              originalPrice: priceCHZ,
+              section: "Section A",
+              row: `Row ${Math.floor(tid / 5) + 1}`,
+              seats: `Seat ${(tid % 5) + 1}`,
+              seller: "PSG Official",
+              sellerRating: 5.0,
+              category: "Soccer",
+              image: image || "/soccer-stadium-match.png",
+              verified: true,
+              trending: tid < 5,
+            })
+          }
+        }
+
+        if (mounted) setChainTickets(results)
+      } catch (e) {
+        console.error("Failed to load on-chain listings:", e)
+        if (mounted) setChainTickets([])
+      } finally {
+        if (mounted) setLoading(false)
+      }
+    })()
+    return () => {
+      mounted = false
+    }
+  }, [])
+
+  const allTickets = useMemo(() => [...mockTickets, ...chainTickets], [chainTickets])
 
   const toggleFavorite = (ticketId: number) => {
     setFavorites((prev) => (prev.includes(ticketId) ? prev.filter((id) => id !== ticketId) : [...prev, ticketId]))
   }
 
-  const filteredTickets = mockTickets.filter((ticket) => {
+  const filteredTickets = allTickets.filter((ticket) => {
+    const q = searchQuery.toLowerCase()
     const matchesSearch =
-      ticket.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      ticket.venue.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      ticket.location.toLowerCase().includes(searchQuery.toLowerCase())
+      ticket.title.toLowerCase().includes(q) ||
+      ticket.venue.toLowerCase().includes(q) ||
+      ticket.location.toLowerCase().includes(q)
     const matchesCategory = selectedCategory === "all" || ticket.category.toLowerCase() === selectedCategory
     return matchesSearch && matchesCategory
   })
@@ -180,12 +273,11 @@ export default function MarketplacePage() {
             </Link>
           </nav>
           <div className="flex items-center gap-3">
-            <Button variant="outline" size="sm">
-              Sign In
-            </Button>
-            <Button size="sm" className="bg-primary hover:bg-primary/90">
-              Sell Tickets
-            </Button>
+            <Link href="/sell">
+              <Button size="sm" className="bg-primary hover:bg-primary/90">
+                Sell Tickets
+              </Button>
+            </Link>
           </div>
         </div>
       </header>
@@ -245,12 +337,18 @@ export default function MarketplacePage() {
         <Tabs defaultValue="all" className="mb-8">
           <TabsList className="grid w-full grid-cols-3 lg:w-auto lg:grid-cols-3">
             <TabsTrigger value="all">All Tickets ({sortedTickets.length})</TabsTrigger>
-            <TabsTrigger value="trending">Trending ({sortedTickets.filter((t) => t.trending).length})</TabsTrigger>
+            <TabsTrigger value="trending">
+              Trending ({sortedTickets.filter((t) => t.trending).length})
+            </TabsTrigger>
             <TabsTrigger value="favorites">Favorites ({favorites.length})</TabsTrigger>
           </TabsList>
 
           <TabsContent value="all" className="mt-6">
-            <TicketGrid tickets={sortedTickets} favorites={favorites} onToggleFavorite={toggleFavorite} />
+            {loading ? (
+              <div className="text-center text-muted-foreground py-12">Loading on-chain listings…</div>
+            ) : (
+              <TicketGrid tickets={sortedTickets} favorites={favorites} onToggleFavorite={toggleFavorite} />
+            )}
           </TabsContent>
 
           <TabsContent value="trending" className="mt-6">
@@ -350,16 +448,6 @@ function TicketGrid({
             <div className="space-y-2 pt-2">
               <div className="text-sm text-muted-foreground font-serif">
                 {ticket.section} • {ticket.row} • {ticket.seats}
-              </div>
-
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <div className="flex items-center gap-1">
-                    <Star className="h-3 w-3 fill-yellow-400 text-yellow-400" />
-                    <span className="text-xs text-muted-foreground">{ticket.sellerRating}</span>
-                  </div>
-                  <span className="text-xs text-muted-foreground">by {ticket.seller}</span>
-                </div>
               </div>
 
               <div className="flex items-center justify-between pt-2">
