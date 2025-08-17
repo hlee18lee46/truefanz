@@ -49,8 +49,8 @@ export default function HomePage() {
             <span className="text-primary block">Securely & Instantly</span>
           </h1>
           <p className="text-xl text-muted-foreground mb-8 max-w-2xl mx-auto font-serif">
-            The world's first blockchain-powered sports ticket exchange. Buy directly from teams or trade with fans
-            using CHZ tokens.
+            The world's first blockchain-powered sports ticket exchange. 
+            Buy directly from teams at a face value using CHZ tokens.
           </p>
 
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
@@ -73,7 +73,7 @@ export default function HomePage() {
           <div className="text-center mb-16">
             <h2 className="text-4xl font-bold font-sans mb-4 text-foreground">Why Choose truefanz Pro?</h2>
             <p className="text-xl text-muted-foreground max-w-2xl mx-auto font-serif">
-              Revolutionary features that make sports ticket trading safe, fast, and transparent.
+              To provide tickets at a fair value without any ticket resellers' price hike. No profit-taking middlemen!
             </p>
           </div>
 

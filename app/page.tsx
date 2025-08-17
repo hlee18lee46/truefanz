@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
-import styles from './landing.module.css';
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { motion } from "framer-motion";
 
 export default function LandingPage() {
   const [showSpicy, setShowSpicy] = useState(false);
@@ -23,38 +23,49 @@ export default function LandingPage() {
   }, []);
 
   const handleEnter = () => {
-    router.push('/home');
+    router.push("/home");
   };
 
   return (
-    <div className={styles.container}>
-      <div className={styles.logoContainer}>
-        <svg
-          className={styles.logo}
-          width="200"
-          height="200"
-          viewBox="0 0 128 128"
-          xmlns="http://www.w3.org/2000/svg"
-        >
-          <path
-            d="M118.44 56.41L71.59 9.56a12.78 12.78 0 00-15.18 0L9.56 56.41a12.78 12.78 0 000 15.18l46.85 46.85a12.78 12.78 0 0015.18 0l46.85-46.85a12.78 12.78 0 000-15.18zM99.6 67.27a8.52 8.52 0 01-8.52 8.52H69.34v21.74a8.52 8.52 0 01-10.65 8.13 8.4 8.4 0 01-6.4-8.13V75.79H30.55a8.52 8.52 0 010-17h21.74V37a8.52 8.52 0 0117.04 0v21.75h21.75a8.52 8.52 0 018.52 8.52z"
-            fill="#FF0000"
-          />
-        </svg>
-      </div>
-      {showSpicy && (
-        <p className={`${styles.text} ${styles.fadeIn}`}>
-          When Chiliz meets fans, we turn spicy green
-        </p>
-      )}
-      {showTrueFanz && (
-        <h1 className={`${styles.trueFanz} ${styles.fadeIn}`}>trueFanz</h1>
-      )}
-      {showButton && (
-        <button className={`${styles.button} ${styles.fadeIn}`} onClick={handleEnter}>
-          Enter
-        </button>
-      )}
+    <div className="flex flex-col items-center justify-center min-h-screen bg-black text-center">
+      {/* Logo Animation */}
+      <motion.img
+        src="/chilizgreen.png"
+        alt="Chiliz Green Logo"
+        initial={{ y: -100, opacity: 0, scale: 0.8 }}
+        animate={{ y: 0, opacity: 1, scale: 1 }}
+        transition={{ duration: 1, ease: "easeOut" }}
+        className="w-64 h-64 mb-6"
+      />
+
+{/* Spicy Text */}
+{showSpicy && (
+  <motion.p
+    initial={{ opacity: 0 }}
+    animate={{ opacity: 1 }}
+    className="text-3xl md:text-5xl font-serif text-white mb-6 leading-snug"
+  >
+    When{" "}
+    <span className="text-[rgb(205,28,24)] font-bold">Chiliz</span> meets fans,
+    we turn spicy <span className="text-green-500 font-bold">green</span>
+  </motion.p>
+)}
+
+{/* trueFanz Button */}
+{showButton && (
+  <motion.button
+    initial={{ opacity: 0 }}
+    animate={{ opacity: 1 }}
+    transition={{ delay: 0.2 }}
+    onClick={handleEnter}
+    className="px-12 py-6 bg-[rgb(205,28,24)] rounded-2xl shadow-lg 
+               transition-colors duration-300 hover:bg-green-500"
+  >
+    <span className="text-6xl md:text-7xl font-extrabold font-sans text-white tracking-wide">
+      trueFanz
+    </span>
+  </motion.button>
+)}
     </div>
   );
 }

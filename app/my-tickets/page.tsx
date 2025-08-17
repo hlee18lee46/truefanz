@@ -11,6 +11,8 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { SecureQRModal } from "@/components/secure-qr-modal";
 import { Calendar, MapPin, Ticket, QrCode, Shield, Download, Share2, AlertTriangle } from "lucide-react";
+import { parseTicketMeta, ipfsToHttp as toHttp } from "@/lib/psgMeta";
+
 import Link from "next/link";
 
 type TicketUI = {
@@ -69,46 +71,39 @@ export default function MyTicketsPage() {
         const owned = await Promise.all(
           ids.map(async (id) => {
             try {
-              const [owner, uri] = await Promise.all([
-                contract.ownerOf(id),
-                contract.tokenURI(id),
-              ]);
-              if (owner.toLowerCase() !== activeAddress.toLowerCase()) return null;
-
+              const [owner, uri] = await Promise.all([contract.ownerOf(id), contract.tokenURI(id)]);
+              if (owner.toLowerCase() !== activeAddress!.toLowerCase()) return null;
+        
               let meta: any = {};
               try {
-                meta = await fetch(ipfsToHttp(uri)).then((r) => r.json());
-              } catch {
-                // ignore metadata fetch failure; still show a basic card
+                const res = await fetch(ipfsToHttp(uri), { cache: "no-store" });
+                meta = await res.json();
+              } catch (e) {
+                console.warn("metadata fetch failed for", id, uri, e);
               }
-
-              const attr = (k: string) =>
-                Array.isArray(meta?.attributes)
-                  ? meta.attributes.find((a: any) => a.trait_type === k)?.value
-                  : undefined;
-
-              const title = meta?.name || `PSG Ticket #${id}`;
-              const image = meta?.image ? ipfsToHttp(meta.image) : undefined;
-
+        
+              const m = parseTicketMeta(meta, id);
+        
               const ticket: TicketUI = {
                 id,
-                title,
-                image,
-                section: attr("Section") || attr("section"),
-                row: attr("Row") || attr("row"),
-                seats: attr("Seat") || attr("seatLabel"),
-                venue: attr("Venue"),
-                location: attr("Location"),
-                date: attr("Date"),
-                time: attr("Time"),
-                price: meta?.price,
-                eventDate: attr("EventDate") || attr("Date"),
+                title: m.name,
+                image: m.image || "/placeholder.svg",
+                section: m.section,
+                row: m.row,
+                seats: m.seats,
+                venue: m.venue,
+                location: m.location,
+                date: m.date,
+                time: m.time,
+                price: m.price,
+                eventDate: m.eventDate,
                 status: "active",
                 qrEnabled: true,
                 transferable: true,
               };
               return ticket;
-            } catch {
+            } catch (e) {
+              // ownerOf may revert for non-existent ids; ignore
               return null;
             }
           })

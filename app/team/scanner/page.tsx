@@ -47,13 +47,11 @@ export default function ScanPage() {
           (result, err) => {
             if (result) {
               const text = result.getText();
-              console.log("QR Code Scanned:", text);
               setRawText(text);
               try {
                 const parsed = JSON.parse(text) as TicketEnvelope;
                 setEnvelope(parsed);
-              } catch (e) {
-                console.error("Failed to parse QR code JSON:", e);
+              } catch {
                 setEnvelope(null); // not JSON; show raw
               }
             }
