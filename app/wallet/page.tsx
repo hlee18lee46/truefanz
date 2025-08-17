@@ -127,9 +127,7 @@ export default function WalletPage() {
               <Link href="/marketplace" className="text-muted-foreground hover:text-foreground transition-colors">
                 Marketplace
               </Link>
-              <Link href="/team/scanner" className="text-primary font-medium">
-                Scan a Fan
-              </Link>
+
                                 <Link href="/my-tickets" className="hover:text-foreground transition-colors">
                                   My Tickets
                                 </Link>
@@ -191,9 +189,7 @@ export default function WalletPage() {
             <Link href="/marketplace" className="text-muted-foreground hover:text-foreground transition-colors">
               Marketplace
             </Link>
-            <Link href="/team/scanner" className="text-primary font-medium">
-              Scan a Fan
-            </Link>
+
                               <Link href="/my-tickets" className="hover:text-foreground transition-colors">
                                 My Tickets
                               </Link>

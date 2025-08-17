@@ -87,7 +87,7 @@ export default function MyTicketsPage() {
               const ticket: TicketUI = {
                 id,
                 title: m.name,
-                image: m.image || "/placeholder.svg",
+                image: m.image || "/chilizgreen.png",
                 section: m.section,
                 row: m.row,
                 seats: m.seats,
@@ -164,9 +164,7 @@ export default function MyTicketsPage() {
             <Link href="/marketplace" className="text-muted-foreground hover:text-foreground transition-colors">
               Marketplace
             </Link>
-            <Link href="/team/scanner" className="text-muted-foreground hover:text-foreground transition-colors">
-              Scan a Fan
-            </Link>
+
             <Link href="/my-tickets" className="text-primary font-medium">
               My Tickets
             </Link>
@@ -176,12 +174,19 @@ export default function MyTicketsPage() {
               <Shield className="h-3 w-3 mr-1" />
               Verified
             </Badge>
-            <Button variant="outline" size="sm">Profile</Button>
+            <div className="flex items-center gap-3">
+            <Link href="/sell">
+              <Button size="sm" className="bg-primary hover:bg-primary/90">
+                Sell Tickets
+              </Button>
+            </Link>
+          </div>
           </div>
         </div>
       </header>
 
       <div className="container mx-auto px-4 py-8">
+        
         {/* Page Header */}
         <div className="mb-8">
           <h1 className="text-4xl font-bold font-sans mb-2 text-foreground">My Tickets</h1>

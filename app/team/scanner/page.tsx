@@ -1,187 +1,255 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
-import { BrowserMultiFormatReader } from "@zxing/browser";
-import { ethers } from "ethers";
-import { Card, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import Link from "next/link";
-import { recoverSigner, isExpired, TicketEnvelope } from "@/lib/qr/verify";
-import PSGTicketNFT from "@/lib/abis/PSGTicketNFT.json";
-
-const NFT_ADDRESS = process.env.NEXT_PUBLIC_PSG_NFT_ADDRESS!;
-const TEAM_WALLETS = (process.env.NEXT_PUBLIC_TEAM_WALLETS || "").toLowerCase().split(",").map(s => s.trim()).filter(Boolean);
-// optional: read-only RPC for fast reads
-const RPC_URL = process.env.NEXT_PUBLIC_CHILIZ_RPC || "";
+import { useEffect, useRef, useState } from "react";
+import {
+  BrowserQRCodeReader,
+  BrowserMultiFormatReader, // only for listVideoInputDevices
+  IScannerControls,
+} from "@zxing/browser";
 
 export default function ScanPage() {
   const videoRef = useRef<HTMLVideoElement | null>(null);
-  const readerRef = useRef<BrowserMultiFormatReader | null>(null);
-  const startedRef = useRef(false);
-  const [cameraError, setCameraError] = useState("");
-  const [rawText, setRawText] = useState("");
-  const [envelope, setEnvelope] = useState<TicketEnvelope | null>(null);
-  const [verified, setVerified] = useState<null | { signer: string; ownerOnChain: string; ok: boolean; reason?: string }>(null);
-  const [scanning, setScanning] = useState(true);
+  const readerRef = useRef<BrowserQRCodeReader | null>(null);
+  const controlsRef = useRef<IScannerControls | null>(null);
 
-  // ---- Gate: team wallets only (optional UI check; you may already guard route higher up)
-  // If you use Privy, read the connected EOA here and compare to TEAM_WALLETS.
-  // For brevity, this sample doesn’t include Privy hooks.
+  const [devices, setDevices] = useState<MediaDeviceInfo[]>([]);
+  const [deviceId, setDeviceId] = useState<string | undefined>(undefined);
+  const [scanning, setScanning] = useState(false);
+  const [torchOn, setTorchOn] = useState(false);
+  const [lastText, setLastText] = useState<string>("");
+  const [jsonPreview, setJsonPreview] = useState<string>("");
+  const [errorMsg, setErrorMsg] = useState<string>("");
 
-  useEffect(() => {
-    if (startedRef.current) return;
-    startedRef.current = true;
-
-    const start = async () => {
-      try {
-        readerRef.current = new BrowserMultiFormatReader();
-        const devices = await navigator.mediaDevices.enumerateDevices();
-        const videoInputs = devices.filter(d => d.kind === "videoinput");
-        const preferred = videoInputs.find(d => /back|rear|environment/i.test(d.label))?.deviceId || videoInputs[0]?.deviceId;
-
-        const video = videoRef.current!;
-        await readerRef.current.decodeFromVideoDevice(
-          preferred ?? null,
-          video,
-          (result, err) => {
-            if (result) {
-              const text = result.getText();
-              setRawText(text);
-              try {
-                const parsed = JSON.parse(text) as TicketEnvelope;
-                setEnvelope(parsed);
-              } catch {
-                setEnvelope(null); // not JSON; show raw
-              }
-            }
-            // ignore decode errors; they happen frequently while scanning
-          }
-        );
-      } catch (e: any) {
-        console.error(e);
-        setCameraError(e?.message || String(e));
-      }
-    };
-
-    start();
-
-    return () => {
-      setScanning(false);
-      if (readerRef.current) {
-        readerRef.current.reset();
-        readerRef.current = null;
-      }
-    };
-  }, []);
-
-  // Verify on every valid envelope
+  // Ask for permission once so device labels populate
   useEffect(() => {
     (async () => {
-      if (!envelope) {
-        setVerified(null);
-        return;
-      }
       try {
-        // 1) expiry
-        if (isExpired(envelope)) {
-          setVerified({ signer: "", ownerOnChain: "", ok: false, reason: "QR expired" });
-          return;
-        }
+        // Request cam just to unlock labels; immediately stop it
+        const temp = await navigator.mediaDevices.getUserMedia({ video: true });
+        temp.getTracks().forEach((t) => t.stop());
+      } catch {
+        // ignore; user can still start and pick device
+      }
 
-        // 2) recover signer from signature
-        const signer = recoverSigner(envelope);
-        const expectedOwner = envelope.payload.owner.toLowerCase();
-        if (signer.toLowerCase() !== expectedOwner) {
-          setVerified({ signer, ownerOnChain: "", ok: false, reason: "Signature does not match payload.owner" });
-          return;
-        }
-
-        // 3) on-chain ownership check
-        const provider = RPC_URL
-          ? new ethers.providers.JsonRpcProvider(RPC_URL)
-          : new ethers.providers.Web3Provider((window as any).ethereum);
-        const nft = new ethers.Contract(NFT_ADDRESS, (PSGTicketNFT as any).abi, provider);
-        const ownerOnChain = (await nft.ownerOf(envelope.payload.ticketId)).toLowerCase();
-
-        const ok = ownerOnChain === expectedOwner;
-        setVerified({ signer, ownerOnChain, ok, reason: ok ? undefined : "ownerOf() mismatch" });
+      try {
+        const all = await BrowserMultiFormatReader.listVideoInputDevices();
+        setDevices(all);
+        const back = all.find((d) => /back|rear|environment/i.test(d.label));
+        setDeviceId(back?.deviceId || all[0]?.deviceId);
       } catch (e: any) {
-        console.error(e);
-        setVerified({ signer: "", ownerOnChain: "", ok: false, reason: e?.message || "verify error" });
+        setErrorMsg(e?.message || "Failed to list video input devices.");
       }
     })();
-  }, [envelope]);
 
-  const statusBadge = useMemo(() => {
-    if (!envelope) return <Badge variant="secondary">Waiting for QR…</Badge>;
-    if (verified?.ok) return <Badge className="bg-green-600 text-white">Valid</Badge>;
-    if (verified && verified.ok === false) return <Badge className="bg-red-600 text-white">Invalid</Badge>;
-    return <Badge variant="secondary">Verifying…</Badge>;
-  }, [envelope, verified]);
+    return () => {
+      stopScanner();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  function parseMaybeJson(text: string) {
+    try {
+      const obj = JSON.parse(text);
+      setJsonPreview(JSON.stringify(obj, null, 2));
+    } catch {
+      setJsonPreview("");
+    }
+  }
+
+  async function startScanner() {
+    if (!videoRef.current) {
+      setErrorMsg("Video element missing.");
+      return;
+    }
+    setErrorMsg("");
+
+    const reader = new BrowserQRCodeReader();
+    reader.timeBetweenDecodingAttempts = 100; // smooth CPU usage
+    readerRef.current = reader;
+
+    try {
+      setScanning(true);
+      controlsRef.current = await reader.decodeFromVideoDevice(
+        deviceId ?? undefined, // let library choose if undefined
+        videoRef.current,
+        (result, err) => {
+          if (result) {
+            const txt = result.getText();
+            if (txt && txt !== lastText) {
+              console.log("QR result:", txt); // <- sanity
+              setLastText(txt);
+              parseMaybeJson(txt);
+            }
+            return;
+          }
+          if (
+            err &&
+            err.name &&
+            !/NotFoundException|ChecksumException|FormatException/.test(err.name)
+          ) {
+            setErrorMsg(err.message || String(err));
+          }
+        }
+      );
+    } catch (e: any) {
+      setErrorMsg(e?.message || "Failed to start scanner.");
+      setScanning(false);
+    }
+  }
+
+  function stopScanner() {
+    try {
+      controlsRef.current?.stop();
+      controlsRef.current = null;
+    } catch {}
+    readerRef.current = null;
+
+    try {
+      const stream = videoRef.current?.srcObject as MediaStream | null;
+      stream?.getTracks().forEach((t) => t.stop());
+      if (videoRef.current) videoRef.current.srcObject = null;
+    } catch {}
+
+    setScanning(false);
+    setTorchOn(false);
+  }
+
+  async function toggleTorch() {
+    const stream = videoRef.current?.srcObject as MediaStream | null;
+    const videoTrack = stream?.getVideoTracks()?.[0];
+    if (!videoTrack) return;
+
+    const caps: any = videoTrack.getCapabilities?.() || {};
+    if (!("torch" in caps)) {
+      setErrorMsg("Torch not supported on this device.");
+      return;
+    }
+    try {
+      await videoTrack.applyConstraints({
+        advanced: [{ torch: !torchOn }],
+      } as MediaTrackConstraints);
+      setTorchOn((v) => !v);
+    } catch (e: any) {
+      setErrorMsg(e?.message || "Failed to toggle torch.");
+    }
+  }
 
   return (
-    <div className="container mx-auto px-4 py-8">
-      <Link href="/marketplace" className="text-sm text-muted-foreground hover:underline">← Back</Link>
+    <div className="min-h-screen bg-black text-white">
+      {/* Header */}
+      <header className="sticky top-0 z-10 border-b border-white/10 bg-black/70 backdrop-blur">
+        <div className="mx-auto max-w-4xl px-4 py-4 flex items-center justify-between">
+          <h1 className="text-2xl font-bold tracking-wide">
+            <span className="text-white">Scan a Fan — </span>
+            <span className="text-[rgb(205,28,24)]">trueFanz</span>
+          </h1>
+          <div className="text-sm opacity-70">{scanning ? "Scanning…" : "Idle"}</div>
+        </div>
+      </header>
 
-      <Card className="mt-4">
-        <CardHeader>
-          <CardTitle>Scan Fan QR</CardTitle>
-          <CardDescription>Point camera at the fan’s rotating ticket QR.</CardDescription>
-        </CardHeader>
-
-        <div className="p-4 grid md:grid-cols-2 gap-6">
-          <div className="rounded-lg overflow-hidden bg-black">
-            <video
-              ref={videoRef}
-              style={{ width: "100%", height: "100%", objectFit: "cover" }}
-              muted
-              playsInline
-              autoPlay
-            />
+      <main className="mx-auto max-w-4xl px-4 py-6 space-y-6">
+        {/* Controls */}
+        <div className="flex flex-col md:flex-row gap-3 items-stretch md:items-end">
+          <div className="flex-1">
+            <label className="block text-sm mb-1 opacity-80">Camera</label>
+            <select
+              className="w-full bg-white/10 border border-white/10 rounded px-3 py-2"
+              value={deviceId}
+              onChange={(e) => setDeviceId(e.target.value)}
+              disabled={scanning}
+            >
+              {devices.map((d) => (
+                <option key={d.deviceId} value={d.deviceId}>
+                  {d.label || `Camera ${d.deviceId.slice(-4)}`}
+                </option>
+              ))}
+            </select>
           </div>
 
-          <div className="space-y-3">
-            <div>Scan Status: {statusBadge}</div>
-
-            {cameraError && (
-              <div className="text-sm text-red-600">Camera error: {cameraError}</div>
+          <div className="flex gap-3">
+            {!scanning ? (
+              <button
+                onClick={startScanner}
+                className="px-5 py-2 rounded bg-[rgb(205,28,24)] hover:bg-green-500 transition-colors"
+              >
+                Start
+              </button>
+            ) : (
+              <button
+                onClick={stopScanner}
+                className="px-5 py-2 rounded bg-white/10 hover:bg-white/20 transition-colors"
+              >
+                Stop
+              </button>
             )}
-
-            <div className="text-xs text-muted-foreground break-words">
-              <div className="font-semibold mb-1">Raw scan:</div>
-              <pre className="whitespace-pre-wrap">{rawText || "(no data)"}</pre>
-            </div>
-
-            {envelope && (
-              <>
-                <div className="text-sm">
-                  <div><b>ticketId:</b> {envelope.payload.ticketId}</div>
-                  <div><b>owner (payload):</b> {envelope.payload.owner}</div>
-                  <div><b>exp:</b> {new Date(envelope.payload.exp * 1000).toLocaleTimeString()}</div>
-                  <div><b>signer (recovered):</b> {verified?.signer || "…"} </div>
-                  <div><b>ownerOnChain:</b> {verified?.ownerOnChain || "…"} </div>
-                  {verified?.reason && <div className="text-red-600"><b>reason:</b> {verified.reason}</div>}
-                </div>
-
-                {/* Example: mark attendance on success (you can call your backend or contract here) */}
-                <div className="flex gap-2 pt-2">
-                  <Button
-                    disabled={!verified?.ok}
-                    onClick={() => alert("Attendance confirmed (demo). Call your contract or API here.")}
-                    className="bg-primary hover:bg-primary/90"
-                  >
-                    Confirm Entry
-                  </Button>
-                  <Button variant="outline" onClick={() => { setEnvelope(null); setRawText(""); }}>
-                    Clear
-                  </Button>
-                </div>
-              </>
-            )}
+            <button
+              onClick={toggleTorch}
+              disabled={!scanning}
+              className="px-5 py-2 rounded bg-white/10 hover:bg-white/20 transition-colors disabled:opacity-40"
+              title="Toggle flashlight (if supported)"
+            >
+              {torchOn ? "Torch: On" : "Torch: Off"}
+            </button>
           </div>
         </div>
-      </Card>
+
+        {/* Video with scanning frame */}
+        <div className="relative mx-auto max-w-md">
+          <video
+            ref={videoRef}
+            className="w-full rounded-xl border border-white/10 bg-black"
+            muted
+            autoPlay
+            playsInline
+          />
+          <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+            <div className="w-56 h-56 border-2 border-green-500/70 rounded-xl"></div>
+          </div>
+        </div>
+
+        {/* Result / Errors */}
+        {!!lastText && (
+          <div className="rounded-xl border border-white/10 bg-white/5 p-4">
+            <div className="flex items-center justify-between mb-2">
+              <h2 className="font-semibold">Last scan</h2>
+              <button
+                className="text-sm underline hover:no-underline"
+                onClick={() => navigator.clipboard.writeText(lastText)}
+              >
+                Copy raw
+              </button>
+            </div>
+
+            <div className="text-xs opacity-70 mb-2">Raw</div>
+            <pre className="whitespace-pre-wrap break-words text-sm mb-4">{lastText}</pre>
+
+            {jsonPreview ? (
+              <>
+                <div className="text-xs opacity-70 mb-2">Parsed JSON</div>
+                <pre className="overflow-auto max-h-64 bg-black/40 rounded p-3 text-sm">
+                  {jsonPreview}
+                </pre>
+              </>
+            ) : (
+              <div className="text-sm opacity-70">
+                (Not valid JSON — show raw text above)
+              </div>
+            )}
+          </div>
+        )}
+
+        {!!errorMsg && (
+          <div className="rounded-lg border border-red-500/40 bg-red-500/10 p-3 text-sm">
+            {errorMsg}
+          </div>
+        )}
+
+        <ul className="text-sm opacity-70 list-disc pl-5 space-y-1">
+          <li>Use HTTPS or <code>localhost</code> for camera access.</li>
+          <li>Hold the QR inside the green square; keep the phone still.</li>
+          <li>If nothing scans, try switching cameras in the dropdown.</li>
+        </ul>
+      </main>
     </div>
   );
 }

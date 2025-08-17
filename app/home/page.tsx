@@ -17,15 +17,13 @@ export default function HomePage() {
         <div className="container mx-auto px-4 py-4 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Ticket className="h-8 w-8 text-primary" />
-            <span className="text-2xl font-bold font-sans text-foreground">truefanz Pro</span>
+            <Link href="/home" className="text-2xl font-bold font-sans text-foreground">truefanz Pro</Link>
           </div>
           <nav className="hidden md:flex items-center gap-6">
             <Link href="/marketplace" className="text-muted-foreground hover:text-foreground transition-colors">
               Marketplace
             </Link>
-            <Link href="/team/scanner" className="text-muted-foreground hover:text-foreground transition-colors">
-              Scan a Fan
-            </Link>
+
             <Link href="/my-tickets" className="text-muted-foreground hover:text-foreground transition-colors">
               My Tickets
             </Link>
@@ -45,7 +43,7 @@ export default function HomePage() {
             Powered by CHZ Token
           </Badge>
           <h1 className="text-5xl md:text-6xl font-bold font-sans mb-6 text-foreground">
-            Trade Sports Tickets
+            Your Ticket directly from Team
             <span className="text-primary block">Securely & Instantly</span>
           </h1>
           <p className="text-xl text-muted-foreground mb-8 max-w-2xl mx-auto font-serif">
@@ -73,7 +71,7 @@ export default function HomePage() {
           <div className="text-center mb-16">
             <h2 className="text-4xl font-bold font-sans mb-4 text-foreground">Why Choose truefanz Pro?</h2>
             <p className="text-xl text-muted-foreground max-w-2xl mx-auto font-serif">
-              To provide tickets at a fair value without any ticket resellers' price hike. No profit-taking middlemen!
+              To provide tickets at a fair value without any ticket resellers' price hike. 
             </p>
           </div>
 
@@ -111,74 +109,6 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* Featured Events */}
-      <section className="py-20 px-4">
-        <div className="container mx-auto">
-          <div className="flex items-center justify-between mb-12">
-            <div>
-              <h2 className="text-4xl font-bold font-sans mb-4 text-foreground">Featured Events</h2>
-              <p className="text-xl text-muted-foreground font-serif">Hot tickets available now</p>
-            </div>
-            <Button variant="outline">View All Events</Button>
-          </div>
-
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {[
-              {
-                title: "Lakers vs Warriors",
-                date: "Dec 25, 2024",
-                venue: "Crypto.com Arena",
-                price: "2,500 CHZ",
-                image: "/basketball-arena.png",
-              },
-              {
-                title: "Real Madrid vs Barcelona",
-                date: "Jan 15, 2025",
-                venue: "Santiago Bernabéu",
-                price: "3,200 CHZ",
-                image: "/soccer-stadium-match.png",
-              },
-              {
-                title: "Chiefs vs Bills",
-                date: "Feb 2, 2025",
-                venue: "Arrowhead Stadium",
-                price: "4,100 CHZ",
-                image: "/american-football-stadium.png",
-              },
-            ].map((event, index) => (
-              <Card key={index} className="border-border bg-card hover:shadow-lg transition-shadow overflow-hidden">
-                <div className="aspect-video bg-muted">
-                  <img
-                    src={event.image || "/placeholder.svg"}
-                    alt={event.title}
-                    className="w-full h-full object-cover"
-                  />
-                </div>
-                <CardHeader>
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <CardTitle className="font-sans text-lg">{event.title}</CardTitle>
-                      <CardDescription className="font-serif">
-                        {event.date} • {event.venue}
-                      </CardDescription>
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
-                      <span className="text-sm text-muted-foreground">4.9</span>
-                    </div>
-                  </div>
-                  <div className="flex items-center justify-between pt-4">
-                    <span className="text-2xl font-bold text-primary font-sans">{event.price}</span>
-                    <Button size="sm" className="bg-primary hover:bg-primary/90">
-                      View Tickets
-                    </Button>
-                  </div>
-                </CardHeader>
-              </Card>
-            ))}
-          </div>
-        </div>
-      </section>
 
       {/* Footer */}
       <footer className="bg-card border-t border-border py-12 px-4">
@@ -201,11 +131,7 @@ export default function HomePage() {
                     Marketplace
                   </Link>
                 </li>
-                <li>
-                  <Link href="/team/scanner" className="hover:text-foreground transition-colors">
-                    Scan a Fan
-                  </Link>
-                </li>
+
                 <li>
                   <Link href="/my-tickets" className="hover:text-foreground transition-colors">
                     My Tickets

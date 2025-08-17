@@ -49,14 +49,16 @@ function ipfsToHttp(u?: string) {
   return u
 }
 
+
+
 // --- mock (unchanged)
 const mockTicket = {
   id: 1,
   title: "Lakers vs Warriors",
-  date: "Dec 25, 2024",
-  time: "8:00 PM",
-  venue: "Crypto.com Arena",
-  location: "Los Angeles, CA",
+  date: "Jan 15, 2025",
+  time: "7:00 PM",
+  venue: "PSG Arena",
+  location: "Parc des Princes, Paris, FR",
   price: 2500,
   originalPrice: 3000,
   section: "Section 101",
@@ -70,7 +72,7 @@ const mockTicket = {
     avatar: "/placeholder.svg?height=40&width=40",
   },
   category: "Basketball",
-  image: "/basketball-arena.png",
+  image: "/soccer-stadium-match.png",
   verified: true,
   trending: true,
   description:
@@ -297,26 +299,8 @@ export default function TicketDetailPage() {
               </CardHeader>
               <CardContent>
                 <Tabs defaultValue="details" className="w-full">
-                  <TabsList className="grid w-full grid-cols-3">
-                    <TabsTrigger value="details">Details</TabsTrigger>
-                    <TabsTrigger value="seating">Seating</TabsTrigger>
-                    <TabsTrigger value="policies">Policies</TabsTrigger>
-                  </TabsList>
 
-                  <TabsContent value="details" className="mt-4 space-y-4">
-                    <p className="text-muted-foreground font-serif">{mockTicket.description}</p>
-                    <div>
-                      <h4 className="font-semibold font-sans mb-2">Features</h4>
-                      <ul className="space-y-1">
-                        {mockTicket.features.map((feature, index) => (
-                          <li key={index} className="flex items-center gap-2 text-sm text-muted-foreground font-serif">
-                            <div className="h-1.5 w-1.5 bg-primary rounded-full" />
-                            {feature}
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  </TabsContent>
+
 
                   <TabsContent value="seating" className="mt-4">
                     <div className="space-y-4">

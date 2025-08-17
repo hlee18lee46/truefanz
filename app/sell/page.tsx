@@ -146,7 +146,7 @@ export default function SellPage() {
       } catch (e: any) {
         console.error("Static call failed:", e);
         const reason = e?.error?.data ?? e?.data ?? e?.message ?? "revert";
-        setStatus(`Listing would revert: ${String(reason)}`);
+        setStatus(`Are you a fan? Only Team can sell tickets through platform, you can send your ticket NFT to another person's wallet. This is to prevent ticket resellers`);
         return;
       }
 

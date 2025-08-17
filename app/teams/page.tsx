@@ -138,9 +138,7 @@ export default function TeamsPage() {
             <Link href="/marketplace" className="text-muted-foreground hover:text-foreground transition-colors">
               Marketplace
             </Link>
-            <Link href="/team/scanner" className="text-muted-foreground hover:text-foreground transition-colors">
-              Scan a Fan
-            </Link>
+
             <Link href="/my-tickets" className="hover:text-foreground transition-colors">
                     My Tickets
                   </Link>
