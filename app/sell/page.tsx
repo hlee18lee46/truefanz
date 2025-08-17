@@ -177,10 +177,6 @@ export default function SellPage() {
         </CardHeader>
 
         <div className="px-6 pb-6 space-y-5">
-          <div>
-            <Label className="mb-2 block">NFT Contract</Label>
-            <Input value={NFT_ADDRESS} readOnly />
-          </div>
 
           <div>
             <Label className="mb-2 block">Token ID</Label>

@@ -1,224 +1,189 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import dynamic from "next/dynamic";
-import { usePrivy, useWallets } from "@privy-io/react-auth";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { BrowserMultiFormatReader } from "@zxing/browser";
+import { ethers } from "ethers";
+import { Card, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
-import { Shield, CheckCircle, XCircle, ScanLine, Ticket, User, Clock, AlertTriangle } from "lucide-react";
+import { recoverSigner, isExpired, TicketEnvelope } from "@/lib/qr/verify";
+import PSGTicketNFT from "@/lib/abis/PSGTicketNFT.json";
 
-const QrReader = dynamic(() => import("react-qr-reader").then((m: any) => m.QrReader), { ssr: false });
+const NFT_ADDRESS = process.env.NEXT_PUBLIC_PSG_NFT_ADDRESS!;
+const TEAM_WALLETS = (process.env.NEXT_PUBLIC_TEAM_WALLETS || "").toLowerCase().split(",").map(s => s.trim()).filter(Boolean);
+// optional: read-only RPC for fast reads
+const RPC_URL = process.env.NEXT_PUBLIC_CHILIZ_RPC || "";
 
-const TEAM_WALLETS = (process.env.NEXT_PUBLIC_TEAM_WALLETS || "")
-  .split(",")
-  .map((a) => a.trim().toLowerCase())
-  .filter(Boolean);
+export default function ScanPage() {
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const readerRef = useRef<BrowserMultiFormatReader | null>(null);
+  const startedRef = useRef(false);
+  const [cameraError, setCameraError] = useState("");
+  const [rawText, setRawText] = useState("");
+  const [envelope, setEnvelope] = useState<TicketEnvelope | null>(null);
+  const [verified, setVerified] = useState<null | { signer: string; ownerOnChain: string; ok: boolean; reason?: string }>(null);
+  const [scanning, setScanning] = useState(true);
 
-type VerifyResult =
-  | { ok: true; recovered: string; tokenId: string | number }
-  | { ok: false; reason: string; recovered?: string; owner?: string; message?: string };
-
-export default function TeamScannerPage() {
-  const { ready, authenticated, login } = usePrivy();
-  const { wallets } = useWallets();
-
-  const [address, setAddress] = useState<string>("");
-  const [authError, setAuthError] = useState<string>("");
-  const [scanError, setScanError] = useState<string>("");
-  const [verifying, setVerifying] = useState<boolean>(false);
-  const [result, setResult] = useState<VerifyResult | null>(null);
-  const [lastScanned, setLastScanned] = useState<string>("");
-
-  const evmWallet = useMemo(
-    () => wallets.find((w) => w.walletClientType === "privy" || w.address),
-    [wallets]
-  );
+  // ---- Gate: team wallets only (optional UI check; you may already guard route higher up)
+  // If you use Privy, read the connected EOA here and compare to TEAM_WALLETS.
+  // For brevity, this sample doesn’t include Privy hooks.
 
   useEffect(() => {
-    (async () => {
+    if (startedRef.current) return;
+    startedRef.current = true;
+
+    const start = async () => {
       try {
-        if (!ready) return;
-        if (!authenticated) {
-          setAuthError("");
+        readerRef.current = new BrowserMultiFormatReader();
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        const videoInputs = devices.filter(d => d.kind === "videoinput");
+        const preferred = videoInputs.find(d => /back|rear|environment/i.test(d.label))?.deviceId || videoInputs[0]?.deviceId;
+
+        const video = videoRef.current!;
+        await readerRef.current.decodeFromVideoDevice(
+          preferred ?? null,
+          video,
+          (result, err) => {
+            if (result) {
+              const text = result.getText();
+              console.log("QR Code Scanned:", text);
+              setRawText(text);
+              try {
+                const parsed = JSON.parse(text) as TicketEnvelope;
+                setEnvelope(parsed);
+              } catch (e) {
+                console.error("Failed to parse QR code JSON:", e);
+                setEnvelope(null); // not JSON; show raw
+              }
+            }
+            // ignore decode errors; they happen frequently while scanning
+          }
+        );
+      } catch (e: any) {
+        console.error(e);
+        setCameraError(e?.message || String(e));
+      }
+    };
+
+    start();
+
+    return () => {
+      setScanning(false);
+      if (readerRef.current) {
+        readerRef.current.reset();
+        readerRef.current = null;
+      }
+    };
+  }, []);
+
+  // Verify on every valid envelope
+  useEffect(() => {
+    (async () => {
+      if (!envelope) {
+        setVerified(null);
+        return;
+      }
+      try {
+        // 1) expiry
+        if (isExpired(envelope)) {
+          setVerified({ signer: "", ownerOnChain: "", ok: false, reason: "QR expired" });
           return;
         }
-        if (!evmWallet) return;
-        const provider = await evmWallet.getEthereumProvider();
-        const addr = provider.selectedAddress || evmWallet.address;
-        if (!addr) return;
-        setAddress(addr);
+
+        // 2) recover signer from signature
+        const signer = recoverSigner(envelope);
+        const expectedOwner = envelope.payload.owner.toLowerCase();
+        if (signer.toLowerCase() !== expectedOwner) {
+          setVerified({ signer, ownerOnChain: "", ok: false, reason: "Signature does not match payload.owner" });
+          return;
+        }
+
+        // 3) on-chain ownership check
+        const provider = RPC_URL
+          ? new ethers.providers.JsonRpcProvider(RPC_URL)
+          : new ethers.providers.Web3Provider((window as any).ethereum);
+        const nft = new ethers.Contract(NFT_ADDRESS, (PSGTicketNFT as any).abi, provider);
+        const ownerOnChain = (await nft.ownerOf(envelope.payload.ticketId)).toLowerCase();
+
+        const ok = ownerOnChain === expectedOwner;
+        setVerified({ signer, ownerOnChain, ok, reason: ok ? undefined : "ownerOf() mismatch" });
       } catch (e: any) {
-        setAuthError(e?.message || "Wallet error");
+        console.error(e);
+        setVerified({ signer: "", ownerOnChain: "", ok: false, reason: e?.message || "verify error" });
       }
     })();
-  }, [ready, authenticated, evmWallet]);
+  }, [envelope]);
 
-  const isTeam = address && TEAM_WALLETS.includes(address.toLowerCase());
-
-  const handleScan = async (text?: string | null) => {
-    if (!text || text === lastScanned) return; // basic de-dupe
-    setLastScanned(text);
-    setScanError("");
-    setVerifying(true);
-    setResult(null);
-
-    try {
-      const envelope = JSON.parse(text); // { payload, signature }
-      const res = await fetch("/api/verify-qr", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(envelope),
-      });
-      const json = (await res.json()) as VerifyResult;
-      setResult(json);
-    } catch (e: any) {
-      setScanError(e?.message || "Invalid QR");
-    } finally {
-      setVerifying(false);
-    }
-  };
-
-  const resetScan = () => {
-    setResult(null);
-    setScanError("");
-    setLastScanned("");
-  };
+  const statusBadge = useMemo(() => {
+    if (!envelope) return <Badge variant="secondary">Waiting for QR…</Badge>;
+    if (verified?.ok) return <Badge className="bg-green-600 text-white">Valid</Badge>;
+    if (verified && verified.ok === false) return <Badge className="bg-red-600 text-white">Invalid</Badge>;
+    return <Badge variant="secondary">Verifying…</Badge>;
+  }, [envelope, verified]);
 
   return (
-    <div className="container mx-auto px-4 py-8 space-y-6">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <Shield className="h-6 w-6 text-primary" />
-          <h1 className="text-2xl font-bold font-sans">Team Scanner</h1>
+    <div className="container mx-auto px-4 py-8">
+      <Link href="/marketplace" className="text-sm text-muted-foreground hover:underline">← Back</Link>
+
+      <Card className="mt-4">
+        <CardHeader>
+          <CardTitle>Scan Fan QR</CardTitle>
+          <CardDescription>Point camera at the fan’s rotating ticket QR.</CardDescription>
+        </CardHeader>
+
+        <div className="p-4 grid md:grid-cols-2 gap-6">
+          <div className="rounded-lg overflow-hidden bg-black">
+            <video
+              ref={videoRef}
+              style={{ width: "100%", height: "100%", objectFit: "cover" }}
+              muted
+              playsInline
+              autoPlay
+            />
+          </div>
+
+          <div className="space-y-3">
+            <div>Scan Status: {statusBadge}</div>
+
+            {cameraError && (
+              <div className="text-sm text-red-600">Camera error: {cameraError}</div>
+            )}
+
+            <div className="text-xs text-muted-foreground break-words">
+              <div className="font-semibold mb-1">Raw scan:</div>
+              <pre className="whitespace-pre-wrap">{rawText || "(no data)"}</pre>
+            </div>
+
+            {envelope && (
+              <>
+                <div className="text-sm">
+                  <div><b>ticketId:</b> {envelope.payload.ticketId}</div>
+                  <div><b>owner (payload):</b> {envelope.payload.owner}</div>
+                  <div><b>exp:</b> {new Date(envelope.payload.exp * 1000).toLocaleTimeString()}</div>
+                  <div><b>signer (recovered):</b> {verified?.signer || "…"} </div>
+                  <div><b>ownerOnChain:</b> {verified?.ownerOnChain || "…"} </div>
+                  {verified?.reason && <div className="text-red-600"><b>reason:</b> {verified.reason}</div>}
+                </div>
+
+                {/* Example: mark attendance on success (you can call your backend or contract here) */}
+                <div className="flex gap-2 pt-2">
+                  <Button
+                    disabled={!verified?.ok}
+                    onClick={() => alert("Attendance confirmed (demo). Call your contract or API here.")}
+                    className="bg-primary hover:bg-primary/90"
+                  >
+                    Confirm Entry
+                  </Button>
+                  <Button variant="outline" onClick={() => { setEnvelope(null); setRawText(""); }}>
+                    Clear
+                  </Button>
+                </div>
+              </>
+            )}
+          </div>
         </div>
-        <Link href="/marketplace" className="text-sm text-muted-foreground hover:underline">
-          Back to marketplace
-        </Link>
-      </div>
-
-      {!ready ? (
-        <Card>
-          <CardContent className="py-8 text-center text-muted-foreground">Loading…</CardContent>
-        </Card>
-      ) : !authenticated ? (
-        <Card>
-          <CardContent className="py-8 text-center space-y-3">
-            <p className="text-muted-foreground">Sign in with the team wallet to scan tickets.</p>
-            <Button className="bg-primary" onClick={login}>Sign in</Button>
-          </CardContent>
-        </Card>
-      ) : !isTeam ? (
-        <Card>
-          <CardContent className="py-8 text-center space-y-3">
-            <AlertTriangle className="h-6 w-6 text-orange-500 mx-auto" />
-            <p className="font-semibold">Not authorized</p>
-            <p className="text-sm text-muted-foreground">This page is restricted to team wallets only.</p>
-            {!!authError && <p className="text-xs text-red-500">{authError}</p>}
-          </CardContent>
-        </Card>
-      ) : (
-        <>
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <ScanLine className="h-5 w-5 text-primary" />
-                Scan Fan QR
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="rounded-lg overflow-hidden">
-                <QrReader
-                  constraints={{ facingMode: "environment" }}
-                  onResult={(r: any, err: any) => {
-                    if (r?.getText) handleScan(r.getText());
-                    // ignore frame errors
-                  }}
-                  style={{ width: "100%" }}
-                />
-              </div>
-
-              {/* Manual paste fallback */}
-              <textarea
-                className="w-full p-3 rounded border bg-background text-sm"
-                placeholder='Or paste scanned JSON here: {"payload":{...},"signature":"0x..."}'
-                rows={4}
-                onChange={(e) => setLastScanned(e.target.value)}
-                value={lastScanned}
-              />
-              <div className="flex items-center gap-2">
-                <Button onClick={() => handleScan(lastScanned)} disabled={!lastScanned || verifying}>
-                  Verify pasted QR
-                </Button>
-                <Button variant="outline" onClick={resetScan}>Reset</Button>
-              </div>
-
-              {verifying && (
-                <div className="text-sm text-muted-foreground">Verifying…</div>
-              )}
-              {!!scanError && (
-                <div className="text-sm text-red-600">{scanError}</div>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* Result */}
-          {result && (
-            <Card className={result.ok ? "border-green-500" : "border-red-500"}>
-              <CardHeader className="pb-2">
-                <CardTitle className="flex items-center gap-2">
-                  {result.ok ? (
-                    <>
-                      <CheckCircle className="h-5 w-5 text-green-600" />
-                      <span>PASS — Admit fan</span>
-                    </>
-                  ) : (
-                    <>
-                      <XCircle className="h-5 w-5 text-red-600" />
-                      <span>FAIL — Do not admit</span>
-                    </>
-                  )}
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-2 text-sm">
-                {result.ok ? (
-                  <>
-                    <div className="flex items-center gap-2">
-                      <Ticket className="h-4 w-4" />
-                      <span>Token ID: <b>{String(result.tokenId)}</b></span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <User className="h-4 w-4" />
-                      <span>Owner (recovered): <b>{result.recovered}</b></span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Clock className="h-4 w-4" />
-                      <span>Verified at: {new Date().toLocaleTimeString()}</span>
-                    </div>
-                    <div className="pt-2 flex gap-2">
-                      <Button className="bg-green-600 hover:bg-green-700" onClick={resetScan}>Admit Next</Button>
-                      <Button variant="outline" onClick={resetScan}>Scan Again</Button>
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    <p className="text-muted-foreground">Reason: <b>{("reason" in result) ? result.reason : "unknown"}</b></p>
-                    {"owner" in result && result.owner && (
-                      <p className="text-muted-foreground">On-chain owner: {result.owner}</p>
-                    )}
-                    {"recovered" in result && result.recovered && (
-                      <p className="text-muted-foreground">Recovered signer: {result.recovered}</p>
-                    )}
-                    <div className="pt-2">
-                      <Button variant="outline" onClick={resetScan}>Try Again</Button>
-                    </div>
-                  </>
-                )}
-              </CardContent>
-            </Card>
-          )}
-        </>
-      )}
+      </Card>
     </div>
   );
 }
