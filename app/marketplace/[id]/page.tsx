@@ -1,6 +1,7 @@
+// app/marketplace/[id]/page.tsx
 "use client"
 
-import { useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -25,7 +26,30 @@ import {
 import Link from "next/link"
 import { useParams } from "next/navigation"
 
-// Mock data - in real app this would come from API
+import { usePrivy, useWallets } from "@privy-io/react-auth"
+import { ethers } from "ethers"
+
+// ABIs
+import PSGTicketNFT from "@/lib/abis/PSGTicketNFT.json"
+import PrimarySale from "@/lib/abis/PrimarySale.json"
+
+const psgNftAbi = (PSGTicketNFT as any).abi
+const saleAbi = (PrimarySale as any).abi
+
+const NFT_ADDRESS = process.env.NEXT_PUBLIC_PSG_NFT_ADDRESS!
+const SALE_ADDRESS = process.env.NEXT_PUBLIC_FIXED_SALE_ADDRESS!
+const CHILIZ_RPC = process.env.NEXT_PUBLIC_CHILIZ_RPC || "https://spicy-rpc.chiliz.com"
+
+// --- util
+function ipfsToHttp(u?: string) {
+  if (!u) return u
+  if (u.startsWith("ipfs://")) {
+    return `https://gateway.pinata.cloud/ipfs/${u.replace("ipfs://", "")}`
+  }
+  return u
+}
+
+// --- mock (unchanged)
 const mockTicket = {
   id: 1,
   title: "Lakers vs Warriors",
@@ -58,26 +82,146 @@ const mockTicket = {
 
 export default function TicketDetailPage() {
   const params = useParams()
+  const { ready, authenticated, login } = usePrivy()
+  const { wallets } = useWallets()
+
+  // same UI state you had
   const [isFavorite, setIsFavorite] = useState(false)
-  const [showQR, setShowQR] = useState(false)
   const [showPaymentModal, setShowPaymentModal] = useState(false)
 
+  // on-chain state
+  const [status, setStatus] = useState("")
+  const [loading, setLoading] = useState(true)
+  const [isOnChain, setIsOnChain] = useState(false)
+  const [tokenId, setTokenId] = useState<number | null>(null)
+  const [onChainTitle, setOnChainTitle] = useState<string>("")
+  const [onChainImage, setOnChainImage] = useState<string | undefined>(undefined)
+  const [listed, setListed] = useState(false)
+  const [priceWei, setPriceWei] = useState<ethers.BigNumber | null>(null)
+
+  // simple rule: ids >= 10000 are real listings (id = 10000 + tokenId)
+  useEffect(() => {
+    const raw = Number(params?.id as string)
+    if (!Number.isNaN(raw) && raw >= 10000) {
+      setIsOnChain(true)
+      setTokenId(raw - 10000)
+    } else {
+      setIsOnChain(false)
+      setTokenId(null)
+    }
+  }, [params?.id])
+
+  // read listing + metadata
+  useEffect(() => {
+    let mounted = true
+    ;(async () => {
+      if (!isOnChain || tokenId == null) {
+        setLoading(false)
+        return
+      }
+      try {
+        setLoading(true)
+        const provider = new ethers.providers.JsonRpcProvider(CHILIZ_RPC)
+        const sale = new ethers.Contract(SALE_ADDRESS, saleAbi, provider)
+        const nft = new ethers.Contract(NFT_ADDRESS, psgNftAbi, provider)
+
+        const p: ethers.BigNumber = await sale.priceOf(tokenId)
+        const isListed = p.gt(0)
+        if (!mounted) return
+        setListed(isListed)
+        setPriceWei(isListed ? p : null)
+
+        // basic tokenURI -> name/image (best-effort)
+        let name = `PSG Ticket #${tokenId}`
+        let img: string | undefined
+        try {
+          const uri: string = await nft.tokenURI(tokenId)
+          const meta = await fetch(ipfsToHttp(uri)!).then((r) => r.json()).catch(() => null)
+          if (meta?.name) name = meta.name
+          if (meta?.image) img = ipfsToHttp(meta.image)
+        } catch {
+          // ignore metadata errors
+        }
+        if (!mounted) return
+        setOnChainTitle(name)
+        setOnChainImage(img)
+      } catch (e) {
+        console.error(e)
+        if (mounted) setStatus("Failed to load on-chain listing.")
+      } finally {
+        if (mounted) setLoading(false)
+      }
+    })()
+    return () => {
+      mounted = false
+    }
+  }, [isOnChain, tokenId])
+
+  const evmWallet = useMemo(
+    () => wallets.find((w) => w.walletClientType === "privy" || w.address),
+    [wallets]
+  )
+
+  async function getSigner() {
+    if (!evmWallet) throw new Error("No wallet connected")
+    const injected = await evmWallet.getEthereumProvider()
+    const provider = new ethers.providers.Web3Provider(injected) // ethers v5
+    return provider.getSigner()
+  }
+
+  async function buyOnChain() {
+    try {
+      setStatus("")
+      if (!authenticated) await login()
+      if (tokenId == null || !priceWei) {
+        setStatus("Not purchasable.")
+        return
+      }
+      const signer = await getSigner()
+      const sale = new ethers.Contract(SALE_ADDRESS, saleAbi, signer)
+
+      // catch revert early
+      try {
+        await sale.callStatic.buy(tokenId, { value: priceWei })
+      } catch (e: any) {
+        console.error("Static buy revert:", e)
+        setStatus("Buy would revert. Ensure listing is active and you have enough CHZ.")
+        return
+      }
+
+      setStatus("Sending buy transaction…")
+      const tx = await sale.buy(tokenId, { value: priceWei /*, gasLimit: 300000 */ })
+      await tx.wait()
+      setStatus(`Success! tx: ${tx.hash}`)
+    } catch (e: any) {
+      console.error(e)
+      setStatus(e?.message ?? "Error while buying")
+    }
+  }
+
+  const priceDisplay = isOnChain && priceWei
+    ? Number(ethers.utils.formatUnits(priceWei, 18)).toLocaleString()
+    : mockTicket.price.toLocaleString()
+
+  // ---- UI (kept your layout/styles)
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
       <header className="border-b border-border bg-card/50 backdrop-blur-sm sticky top-0 z-50">
         <div className="container mx-auto px-4 py-4 flex items-center justify-between">
-          <Link href="/" className="flex items-center gap-2">
+          <Link href="/home" className="flex items-center gap-2">
             <Ticket className="h-8 w-8 text-primary" />
             <span className="text-2xl font-bold font-sans text-foreground">truefanz Pro</span>
           </Link>
           <div className="flex items-center gap-3">
             <Button variant="outline" size="sm">
-              Sign In
+              {authenticated ? "Connected" : "Sign In"}
             </Button>
-            <Button size="sm" className="bg-primary hover:bg-primary/90">
-              Sell Tickets
-            </Button>
+            <Link href="/sell">
+              <Button size="sm" className="bg-primary hover:bg-primary/90">
+                Sell Tickets
+              </Button>
+            </Link>
           </div>
         </div>
       </header>
@@ -98,25 +242,23 @@ export default function TicketDetailPage() {
             {/* Event Image */}
             <div className="relative rounded-lg overflow-hidden">
               <img
-                src={mockTicket.image || "/placeholder.svg"}
-                alt={mockTicket.title}
+                src={(isOnChain && onChainImage) ? onChainImage : (mockTicket.image || "/placeholder.svg")}
+                alt={(isOnChain ? onChainTitle : mockTicket.title) || "Ticket"}
                 className="w-full aspect-video object-cover"
               />
               <div className="absolute top-4 left-4 flex gap-2">
                 {mockTicket.trending && <Badge className="bg-destructive text-destructive-foreground">Trending</Badge>}
-                {mockTicket.verified && (
-                  <Badge variant="secondary" className="bg-primary/10 text-primary border-primary/20">
-                    <Shield className="h-3 w-3 mr-1" />
-                    Verified
-                  </Badge>
-                )}
+                <Badge variant="secondary" className="bg-primary/10 text-primary border-primary/20">
+                  <Shield className="h-3 w-3 mr-1" />
+                  Verified
+                </Badge>
               </div>
               <div className="absolute top-4 right-4 flex gap-2">
                 <Button
                   variant="secondary"
                   size="icon"
                   className="bg-background/80 hover:bg-background"
-                  onClick={() => setIsFavorite(!isFavorite)}
+                  onClick={() => setIsFavorite((v) => !v)}
                 >
                   <Heart className={`h-4 w-4 ${isFavorite ? "fill-red-500 text-red-500" : ""}`} />
                 </Button>
@@ -131,7 +273,9 @@ export default function TicketDetailPage() {
               <CardHeader>
                 <div className="flex items-start justify-between">
                   <div>
-                    <CardTitle className="text-3xl font-bold font-sans mb-2">{mockTicket.title}</CardTitle>
+                    <CardTitle className="text-3xl font-bold font-sans mb-2">
+                      {isOnChain ? (onChainTitle || `PSG Ticket #${tokenId}`) : mockTicket.title}
+                    </CardTitle>
                     <div className="space-y-2 text-muted-foreground">
                       <div className="flex items-center gap-2">
                         <Calendar className="h-4 w-4" />
@@ -227,15 +371,16 @@ export default function TicketDetailPage() {
                   <div>
                     <div className="flex items-center gap-2 mb-1">
                       <span className="text-3xl font-bold text-primary font-sans">
-                        {mockTicket.price.toLocaleString()} CHZ
+                        {priceDisplay} CHZ
                       </span>
-                      {mockTicket.originalPrice > mockTicket.price && (
+                      {/* keep your discount UI for mock */}
+                      {!isOnChain && mockTicket.originalPrice > mockTicket.price && (
                         <span className="text-lg text-muted-foreground line-through">
                           {mockTicket.originalPrice.toLocaleString()} CHZ
                         </span>
                       )}
                     </div>
-                    {mockTicket.originalPrice > mockTicket.price && (
+                    {!isOnChain && mockTicket.originalPrice > mockTicket.price && (
                       <div className="text-sm text-green-600 font-medium">
                         Save{" "}
                         {(((mockTicket.originalPrice - mockTicket.price) / mockTicket.originalPrice) * 100).toFixed(0)}%
@@ -247,9 +392,16 @@ export default function TicketDetailPage() {
               <CardContent className="space-y-4">
                 <Button
                   className="w-full bg-primary hover:bg-primary/90 text-lg py-6"
-                  onClick={() => setShowPaymentModal(true)}
+                  disabled={isOnChain ? (!ready || !listed || !priceWei) : false}
+                  onClick={() => {
+                    if (isOnChain) {
+                      buyOnChain()
+                    } else {
+                      setShowPaymentModal(true)
+                    }
+                  }}
                 >
-                  Buy with CHZ Tokens
+                  {isOnChain ? (listed ? "Buy with CHZ Tokens" : "Not Listed") : "Buy with CHZ Tokens"}
                 </Button>
                 <Button variant="outline" className="w-full bg-transparent">
                   <MessageCircle className="h-4 w-4 mr-2" />
@@ -258,7 +410,7 @@ export default function TicketDetailPage() {
 
                 <Separator />
 
-                {/* Seller Info */}
+                {/* Seller Info (mock) */}
                 <div>
                   <h4 className="font-semibold font-sans mb-3">Seller Information</h4>
                   <div className="flex items-center gap-3">
@@ -305,6 +457,10 @@ export default function TicketDetailPage() {
                       <span className="font-serif">Secure QR code delivery</span>
                     </div>
                   </div>
+
+                  {!!status && (
+                    <div className="mt-4 text-xs text-muted-foreground break-all">{status}</div>
+                  )}
                 </div>
               </CardContent>
             </Card>
@@ -312,6 +468,7 @@ export default function TicketDetailPage() {
         </div>
       </div>
 
+      {/* keep your existing modal for mock flow */}
       <PaymentModal
         isOpen={showPaymentModal}
         onClose={() => setShowPaymentModal(false)}

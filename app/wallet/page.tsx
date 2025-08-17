@@ -119,7 +119,7 @@ export default function WalletPage() {
         {/* Header */}
         <header className="border-b border-border bg-card/50 backdrop-blur-sm sticky top-0 z-50">
           <div className="container mx-auto px-4 py-4 flex items-center justify-between">
-            <Link href="/" className="flex items-center gap-2">
+            <Link href="/home" className="flex items-center gap-2">
               <Ticket className="h-8 w-8 text-primary" />
               <span className="text-2xl font-bold font-sans text-foreground">truefanz Pro</span>
             </Link>
@@ -183,7 +183,7 @@ export default function WalletPage() {
       {/* Header */}
       <header className="border-b border-border bg-card/50 backdrop-blur-sm sticky top-0 z-50">
         <div className="container mx-auto px-4 py-4 flex items-center justify-between">
-          <Link href="/" className="flex items-center gap-2">
+          <Link href="/home" className="flex items-center gap-2">
             <Ticket className="h-8 w-8 text-primary" />
             <span className="text-2xl font-bold font-sans text-foreground">truefanz Pro</span>
           </Link>

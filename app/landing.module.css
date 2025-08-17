@@ -1,0 +1,67 @@
+.container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100vh;
+  background-color: #000;
+  color: #fff;
+  text-align: center;
+}
+
+.logoContainer {
+  margin-bottom: 2rem;
+}
+
+.logo {
+  animation: colorChange 2s forwards;
+}
+
+@keyframes colorChange {
+  from {
+    fill: #FF0000;
+  }
+  to {
+    fill: #00FF00;
+  }
+}
+
+.text {
+  font-size: 1.5rem;
+  margin-bottom: 1rem;
+}
+
+.trueFanz {
+  font-size: 3rem;
+  font-weight: bold;
+  margin-bottom: 2rem;
+}
+
+.button {
+  padding: 1rem 2rem;
+  font-size: 1.25rem;
+  background-color: #00FF00;
+  color: #000;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  transition: background-color 0.3s;
+}
+
+.button:hover {
+  background-color: #00CC00;
+}
+
+.fadeIn {
+  animation: fadeIn 1s forwards;
+  opacity: 0;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
