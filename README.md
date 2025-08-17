@@ -103,6 +103,45 @@ npx hardhat compile
 npx hardhat run scripts/deploy_nft.cjs --network chilizSpicy
 # copy address → .env NEXT_PUBLIC_PSG_NFT_ADDRESS
 
+
+Frontend starts at http://localhost:3000.
+
+⸻
+
+🔄 Typical Flow
+
+Team Wallet:
+	1.	Upload ticket metadata to Pinata → get IPFS CID.
+	2.	Deploy PSGTicketNFT.sol with base URI = ipfs://<CID>/.
+	3.	Mint 20 tickets.
+	4.	Deploy PrimarySale.sol and list tickets with CHZ price.
+
+Fan Wallet:
+	1.	Logs in via Privy (MetaMask, email, etc).
+	2.	Connects wallet to Chiliz Spicy.
+	3.	Buys ticket NFT in CHZ.
+	4.	Ticket appears under My Tickets (metadata fetched from IPFS).
+	5.	Shows QR code at stadium gate.
+
+Stadium Gate (Team Scanner):
+	1.	Scans QR code.
+	2.	Fetches tokenId + calls ownerOf(tokenId).
+	3.	Verifies fan wallet owns ticket.
+	4.	Grants access.
+
+⸻
+
+⚠️ Troubleshooting
+	•	Camera not working for QR scanner
+	•	Ensure you’re serving frontend via HTTPS (browsers block camera on localhost without secure context).
+	•	“toHttp undefined” error
+	•	Ensure you’re using ipfsToHttp() utility in /lib/ipfs.ts.
+	•	Ticket shows “PSG Ticket #3” only
+	•	Metadata JSON on Pinata may be incomplete — ensure attributes include venue/date/time.
+	•	Contracts not deploying
+	•	Check .env for valid PRIVATE_KEY and CHILIZ_RPC.
+
+
 npx hardhat run scripts/deploy_primary_sale.cjs --network chilizSpicy
 # copy address → .env NEXT_PUBLIC_FIXED_SALE_ADDRESS
 
