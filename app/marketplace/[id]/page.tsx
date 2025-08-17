@@ -403,40 +403,8 @@ export default function TicketDetailPage() {
                 >
                   {isOnChain ? (listed ? "Buy with CHZ Tokens" : "Not Listed") : "Buy with CHZ Tokens"}
                 </Button>
-                <Button variant="outline" className="w-full bg-transparent">
-                  <MessageCircle className="h-4 w-4 mr-2" />
-                  Contact Seller
-                </Button>
 
                 <Separator />
-
-                {/* Seller Info (mock) */}
-                <div>
-                  <h4 className="font-semibold font-sans mb-3">Seller Information</h4>
-                  <div className="flex items-center gap-3">
-                    <Avatar>
-                      <AvatarImage src={mockTicket.seller.avatar || "/placeholder.svg"} />
-                      <AvatarFallback>{mockTicket.seller.name[0]}</AvatarFallback>
-                    </Avatar>
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2">
-                        <span className="font-semibold font-sans">{mockTicket.seller.name}</span>
-                        <Badge variant="secondary" className="bg-primary/10 text-primary border-primary/20">
-                          <Shield className="h-3 w-3 mr-1" />
-                          Verified
-                        </Badge>
-                      </div>
-                      <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                        <div className="flex items-center gap-1">
-                          <Star className="h-3 w-3 fill-yellow-400 text-yellow-400" />
-                          <span>{mockTicket.seller.rating}</span>
-                        </div>
-                        <span>{mockTicket.seller.totalSales} sales</span>
-                        <span>Since {mockTicket.seller.joinDate}</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
 
                 <Separator />
 

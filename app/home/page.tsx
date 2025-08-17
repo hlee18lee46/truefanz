@@ -23,11 +23,8 @@ export default function HomePage() {
             <Link href="/marketplace" className="text-muted-foreground hover:text-foreground transition-colors">
               Marketplace
             </Link>
-            <Link href="/teams" className="text-muted-foreground hover:text-foreground transition-colors">
-              Official Teams
-            </Link>
-            <Link href="/wallet" className="text-muted-foreground hover:text-foreground transition-colors">
-              CHZ Wallet
+            <Link href="/team/scanner" className="text-muted-foreground hover:text-foreground transition-colors">
+              Scan a Fan
             </Link>
             <Link href="/my-tickets" className="text-muted-foreground hover:text-foreground transition-colors">
               My Tickets
@@ -56,27 +53,15 @@ export default function HomePage() {
             using CHZ tokens.
           </p>
 
-          {/* Search Bar */}
-          <div className="max-w-2xl mx-auto mb-12">
-            <div className="relative">
-              <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-muted-foreground h-5 w-5" />
-              <Input
-                placeholder="Search for teams, events, or venues..."
-                className="pl-12 pr-4 py-6 text-lg bg-card border-border focus:border-primary"
-              />
-              <Button className="absolute right-2 top-1/2 transform -translate-y-1/2 bg-primary hover:bg-primary/90">
-                Search
-              </Button>
-            </div>
-          </div>
-
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <Button size="lg" className="bg-primary hover:bg-primary/90 text-lg px-8">
               Browse Tickets
               <ArrowRight className="ml-2 h-5 w-5" />
             </Button>
             <Button size="lg" variant="outline" className="text-lg px-8 bg-transparent">
-              Connect CHZ Wallet
+            <Link href="/my-tickets" className="text-muted-foreground hover:text-foreground transition-colors">
+              Check My Tickets
+            </Link>
             </Button>
           </div>
         </div>
@@ -217,13 +202,8 @@ export default function HomePage() {
                   </Link>
                 </li>
                 <li>
-                  <Link href="/teams" className="hover:text-foreground transition-colors">
-                    Official Teams
-                  </Link>
-                </li>
-                <li>
-                  <Link href="/wallet" className="hover:text-foreground transition-colors">
-                    CHZ Wallet
+                  <Link href="/team/scanner" className="hover:text-foreground transition-colors">
+                    Scan a Fan
                   </Link>
                 </li>
                 <li>

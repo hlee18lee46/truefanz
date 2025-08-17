@@ -138,12 +138,12 @@ export default function TeamsPage() {
             <Link href="/marketplace" className="text-muted-foreground hover:text-foreground transition-colors">
               Marketplace
             </Link>
-            <Link href="/teams" className="text-primary font-medium">
-              Official Teams
+            <Link href="/team/scanner" className="text-muted-foreground hover:text-foreground transition-colors">
+              Scan a Fan
             </Link>
-            <Link href="/wallet" className="text-muted-foreground hover:text-foreground transition-colors">
-              CHZ Wallet
-            </Link>
+            <Link href="/my-tickets" className="hover:text-foreground transition-colors">
+                    My Tickets
+                  </Link>
           </nav>
           <div className="flex items-center gap-3">
             <Button variant="outline" size="sm">

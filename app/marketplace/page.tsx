@@ -265,12 +265,12 @@ export default function MarketplacePage() {
             <Link href="/marketplace" className="text-primary font-medium">
               Marketplace
             </Link>
-            <Link href="/teams" className="text-muted-foreground hover:text-foreground transition-colors">
-              Official Teams
+            <Link href="/team/scanner" className="text-muted-foreground hover:text-foreground transition-colors">
+              Scan a Fan
             </Link>
-            <Link href="/wallet" className="text-muted-foreground hover:text-foreground transition-colors">
-              CHZ Wallet
-            </Link>
+                              <Link href="/my-tickets" className="hover:text-foreground transition-colors">
+                                My Tickets
+                              </Link>
           </nav>
           <div className="flex items-center gap-3">
             <Link href="/sell">
@@ -287,7 +287,7 @@ export default function MarketplacePage() {
         <div className="mb-8">
           <h1 className="text-4xl font-bold font-sans mb-2 text-foreground">Ticket Marketplace</h1>
           <p className="text-xl text-muted-foreground font-serif">
-            Discover and exchange sports tickets with verified sellers worldwide
+            Get your game ticket from your team, say no to ticket-resellers.
           </p>
         </div>
 

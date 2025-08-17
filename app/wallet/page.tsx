@@ -127,12 +127,12 @@ export default function WalletPage() {
               <Link href="/marketplace" className="text-muted-foreground hover:text-foreground transition-colors">
                 Marketplace
               </Link>
-              <Link href="/teams" className="text-muted-foreground hover:text-foreground transition-colors">
-                Official Teams
+              <Link href="/team/scanner" className="text-primary font-medium">
+                Scan a Fan
               </Link>
-              <Link href="/wallet" className="text-primary font-medium">
-                CHZ Wallet
-              </Link>
+                                <Link href="/my-tickets" className="hover:text-foreground transition-colors">
+                                  My Tickets
+                                </Link>
             </nav>
             <div className="flex items-center gap-3">
             <div className="flex items-center gap-3">
@@ -191,12 +191,12 @@ export default function WalletPage() {
             <Link href="/marketplace" className="text-muted-foreground hover:text-foreground transition-colors">
               Marketplace
             </Link>
-            <Link href="/teams" className="text-muted-foreground hover:text-foreground transition-colors">
-              Official Teams
+            <Link href="/team/scanner" className="text-primary font-medium">
+              Scan a Fan
             </Link>
-            <Link href="/wallet" className="text-primary font-medium">
-              CHZ Wallet
-            </Link>
+                              <Link href="/my-tickets" className="hover:text-foreground transition-colors">
+                                My Tickets
+                              </Link>
           </nav>
           <div className="flex items-center gap-3">
             <Badge variant="secondary" className="bg-primary/10 text-primary border-primary/20">

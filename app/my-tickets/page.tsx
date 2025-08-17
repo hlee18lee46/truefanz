@@ -169,11 +169,8 @@ export default function MyTicketsPage() {
             <Link href="/marketplace" className="text-muted-foreground hover:text-foreground transition-colors">
               Marketplace
             </Link>
-            <Link href="/teams" className="text-muted-foreground hover:text-foreground transition-colors">
-              Official Teams
-            </Link>
-            <Link href="/wallet" className="text-muted-foreground hover:text-foreground transition-colors">
-              CHZ Wallet
+            <Link href="/team/scanner" className="text-muted-foreground hover:text-foreground transition-colors">
+              Scan a Fan
             </Link>
             <Link href="/my-tickets" className="text-primary font-medium">
               My Tickets
@@ -324,16 +321,6 @@ export default function MyTicketsPage() {
                         </div>
 
                         <div className="flex gap-2 pt-2">
-                          <Button variant="outline" size="sm" className="flex-1 bg-transparent">
-                            <Download className="h-3 w-3 mr-1" />
-                            Download
-                          </Button>
-                          {ticket.transferable && (
-                            <Button variant="outline" size="sm" className="flex-1 bg-transparent">
-                              <Share2 className="h-3 w-3 mr-1" />
-                              Transfer
-                            </Button>
-                          )}
                         </div>
                       </div>
                     </CardHeader>
